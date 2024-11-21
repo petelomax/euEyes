@@ -1,5 +1,5 @@
 # euEyes
- A Xeyes lookalike
+ A Xeyes lookalike for MS Windows
 
 Eyes that follow your cursor on the desktop.
 
