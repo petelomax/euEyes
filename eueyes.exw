@@ -1,0 +1,253 @@
+-- EuEyes 2015 Andreas Wagner andi@indonesianet.de
+
+include tinlib.ew
+--include std/math.e
+--include std/error.e
+--include std/dll.e
+--include std/machine.e
+
+forward function get_offset()
+
+constant xMax=800
+constant yMax=400
+constant xposl=floor(xMax/4)
+constant yposl=floor(yMax/2)
+constant yposr=yposl
+constant xposr=xposl*3
+constant r1=floor(xMax/5)
+constant r2=floor(r1/5)
+constant r3=floor(r1*0.6)
+constant backcolor=CL_BLACK
+
+object cmd=command_line()
+
+function is_compiled()
+sequence s = command_line()
+    return equal(s[1],s[2]) 
+end function
+
+
+atom left_eye_x=xposl
+atom left_eye_y=yposl
+atom right_eye_x=xposr
+atom right_eye_y=yposr
+enum CL_BLACK1=1,CL_BLACK2,CL_BLACK3
+
+sequence costab=repeat(0,361)
+sequence sintab=repeat(0,361)
+sequence mouseinfo
+
+atom timerupdate=40
+atom angle_l=0
+atom angle_r=0
+
+atom user32=open_dll("user32.dll")
+atom myGetCursorPos=define_c_func(user32,"GetCursorPos",{C_POINTER},C_INT)
+
+atom borderwin=or_all({WS_OVERLAPPEDWINDOW,WS_SYSMENU,WS_MINIMIZEBOX,WS_CAPTION,WS_BORDER,WS_VISIBLE})
+atom noborderwin=or_all({WS_POPUP,WS_VISIBLE})
+SetBrushCol(backcolor) --Color for the NewMB 
+atom background=NewMB(xMax,yMax) 
+
+function deg2rad (object x)
+   
+    return x * PI/180
+
+end function
+
+function rad2deg (object x)
+
+   return x * 180/PI
+
+end function
+
+for i=0 to 360 do
+        sintab[i+1]=sin(deg2rad(i))
+        costab[i+1]=cos(deg2rad(i))
+end for
+
+atom menue=CreatePopupMenu()
+AppendTextItem(menue,100,{"Show Windowframe","Hide Windowframe","More Eyes","Minimize","--","Exit"})
+EnableItem(menue,101,False)
+
+WindowType=NoBorderWin
+--WindowType=StandardWin
+WinOnTop=True
+CloseEventEnabled=True
+{}=Window("euEyes "&m_bits(),ScreenWidth()-xMax/2,0 )
+SetClientRect(WinHwnd,xMax/2,yMax/2)
+SetOpacityRGB(WinHwnd,backcolor)
+
+if is_compiled() then
+    SetIconFR("ICONA")
+else
+    SetIcon("eyes.ico")
+end if
+
+atom OldWndProc=GetWindowLong(WinHwnd,GWL_WNDPROC)
+function myWndProc(atom hwnd,atom msg,atom wParam,atom lParam)
+sequence offset 
+atom pixelcol
+   if msg=WM_NCHITTEST then
+                offset = get_offset()
+                SetCanvas(hwnd)
+                pixelcol=GetPixelColor(LoWord(lParam)-offset[1],HiWord(lParam)-offset[2])
+                switch pixelcol do
+                        case CL_WHITE then
+                                return 2 -- HTCAPTION
+                        case CL_BLACK2 then
+                                return 17 -- HTBOTTOMRIGHT
+                        case CL_BLACK3 then
+                                return 16 -- HTBOTTOMLEF
+                end switch
+    return  CallWindowProc(OldWndProc,hwnd,msg,wParam,lParam)
+    end if
+    return  CallWindowProc(OldWndProc,hwnd,msg,wParam,lParam)
+end function
+
+{}=SetWindowLong(WinHwnd,GWL_WNDPROC,call_back(routine_id("myWndProc")))
+
+
+function GetMouseInfo()
+sequence mouseinfo={0,0,0}
+atom lpPoint=allocate(8)
+        poke4(lpPoint,0)
+        poke4(lpPoint,0)
+        mouseinfo[1]=c_func(myGetCursorPos,{lpPoint})
+        mouseinfo[2]=peek4u(lpPoint)
+        mouseinfo[3]=peek4u(lpPoint+4)
+        free(lpPoint)
+        return mouseinfo
+end function
+
+function get_offset()
+sequence winrect=GetWindowRect(WinHwnd)
+sequence clientrect=GetClientRect(WinHwnd)
+atom winx=winrect[3]-winrect[1]
+atom winy=winrect[4]-winrect[2]
+atom border=floor((winx-clientrect[3])/2)
+atom caption=winy-clientrect[4]-border
+atom offsetx=winrect[1]+border
+atom offsety=winrect[2]+caption
+        return {offsetx,offsety}
+end function
+
+procedure get_absolute_eyes()
+sequence clientrect=GetClientRect(WinHwnd)
+atom offsetx,offsety
+sequence x = get_offset()
+        offsetx=x[1]
+        offsety=x[2]
+        mouseinfo=GetMouseInfo()
+        left_eye_x=offsetx+(floor(clientrect[3]/4))     
+        left_eye_y=offsety+(floor(clientrect[4]/2))
+        right_eye_x=offsetx+(floor(clientrect[3]/4*3))
+        right_eye_y=left_eye_y
+
+-- Calculating left eye
+atom hypo_l =sqrt(power(left_eye_x-mouseinfo[2],2)+power(left_eye_y-mouseinfo[3],2))
+        if hypo_l=0 then  hypo_l=1 end if
+        angle_l=rad2deg (arcsin ((left_eye_y-mouseinfo[3]) / abs(hypo_l)) )
+
+        if (left_eye_x>=mouseinfo[2])  then
+                angle_l=90-angle_l+180
+        else
+                angle_l=90-angle_l-180
+        end if
+        angle_l=abs(angle_l)
+
+-- Calculating right eye
+atom hypo_r =sqrt(power(right_eye_x-mouseinfo[2],2)+power(right_eye_y-mouseinfo[3],2))
+        if hypo_r=0 then hypo_r=1 end if
+        angle_r=rad2deg (arcsin ((right_eye_y-mouseinfo[3]) / abs(hypo_r)) )
+
+        if (right_eye_x>=mouseinfo[2])  then
+                angle_r=90-angle_r+180
+        else
+                angle_r=90-angle_r-180
+        end if
+        angle_r=abs(angle_r)
+end procedure
+
+procedure Paintit()
+sequence rect=GetClientRect(WinHwnd)
+        SetCanvas(background)
+        SetPenSize(20)
+        SetPenCol(CL_BLACK3)
+        SetBrushCol(CL_WHITE)
+        DrawCircle(xposl,yposl,r1,True)
+        SetPenCol(CL_BLACK2)
+        DrawCircle(xposr,yposr,r1,True)
+        SetPenColor(CL_BLACK1) --Pupille
+        SetPenSize(20)
+        SetBrushCol(CL_BLACK1)
+                DrawCircle(floor(sintab[angle_l]*r3+xposl),floor(costab[angle_l]*r3+yposl),r2,True)
+        
+                DrawCircle(floor(sintab[angle_r]*r3+xposr),floor(costab[angle_r]*r3+yposr),r2,True)
+        
+        CopyMBToControl(background,0,0,xMax,yMax,WinHwnd,0,0,rect[3],rect[4])
+end procedure
+
+procedure endapp()
+        CloseApp()
+end procedure
+SetHandler(WinHwnd,Close,routine_id("endapp"))
+
+procedure ontime()
+        get_absolute_eyes()
+        if angle_l>360 then angle_l=361 end if
+        if angle_l<1 then angle_l=1 end if
+        if angle_r<1 then angle_r=1 end if
+        if angle_r>360 then angle_r=361 end if
+        Paintit()
+end procedure
+SetHandler(1,Time,routine_id("ontime"))
+
+procedure showmenue()
+atom offsetx,offsety
+sequence x = get_offset()
+        offsetx=x[1]
+        offsety=x[2]
+        {}=TrackPopupMenu(menue,offsetx+MouseX,offsety+MouseY,WinHwnd)
+end procedure
+SetHandler(WinHwnd,RClick,routine_id("showmenue"))
+
+procedure menuehandler()
+sequence rect
+        if EventItem = 104 then
+                endapp()
+        elsif EventItem=101 then
+                rect=GetClientRect(WinHwnd)
+                ShowWindow(WinHwnd,SW_MINIMIZE)
+                {}=SetWindowLong(WinHwnd,GWL_STYLE,noborderwin)
+                SetOpacityRGB(WinHwnd,backcolor)
+                ShowWindow(WinHwnd,SW_RESTORE)
+                SetClientRect(WinHwnd,rect[3]-rect[1],rect[4]-rect[2])
+                EnableItem(menue,101,False)
+                EnableItem(menue,100,True)
+        elsif EventItem=100 then
+                rect=GetWindowRect(WinHwnd)
+                ShowWindow(WinHwnd,SW_MINIMIZE)
+                {}=SetWindowLong(WinHwnd,GWL_STYLE,borderwin)
+                SetOpacity(WinHwnd,50)
+                ShowWindow(WinHwnd,SW_RESTORE)
+                SetClientRect(WinHwnd,rect[3]-rect[1],rect[4]-rect[2])
+                EnableItem(menue,100,False)
+                EnableItem(menue,101,True)
+        elsif EventItem=103 then
+                ShowWindow(WinHwnd,SW_MINIMIZE)
+        elsif EventItem = 102 then
+                if is_compiled() then  
+                    RunApp(cmd[1], "")
+                else
+                    RunApp(cmd[1],cmd[2])
+                end if
+        end if
+end procedure
+SetHandler(WinHwnd,Menu,routine_id("menuehandler"))
+
+SetWinTimer(timerupdate)
+
+SetDrawingProc(WinHwnd,routine_id("ontime"))
+
+WinMain()
