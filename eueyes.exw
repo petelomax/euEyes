@@ -8,8 +8,10 @@ include tinlib.ew
 
 forward function get_offset()
 
-constant xMax=800
-constant yMax=400
+--constant xMax=800
+--constant yMax=400
+constant xMax=ScreenWidth()
+constant yMax=ScreenHeight()
 constant xposl=floor(xMax/4)
 constant yposl=floor(yMax/2)
 constant yposr=yposl
@@ -75,7 +77,7 @@ WindowType=NoBorderWin
 WinOnTop=True
 CloseEventEnabled=True
 {}=Window("euEyes "&m_bits(),ScreenWidth()-xMax/2,0 )
-SetClientRect(WinHwnd,xMax/2,yMax/2)
+SetClientRect(WinHwnd,xMax/8,yMax/4)
 SetOpacityRGB(WinHwnd,backcolor)
 
 if is_compiled() then
